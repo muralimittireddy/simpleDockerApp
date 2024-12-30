@@ -1,0 +1,59 @@
+services:
+  pg_db:
+    image: postgres:13
+    container_name: pg_database
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: root
+      POSTGRES_DB: taxi_data
+    volumes:
+      - ./ny_taxi_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - pg_network
+    # health check checks the postgres db is accepting the connections or not
+    # if it responds , health check passes and container marked healthy
+    # if it fials i.e db server is not running , 
+    # docker will try up to 5 times before marking container as unhealthy
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U root -d taxi_data"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pg_admin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: root@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: root
+    ports:
+      - "8080:80"
+    networks:
+      - pg_network
+
+  python_script:
+    build:
+      context: .
+      dockerfile: dockerfile
+    container_name: sample_script
+    # depends on just makes sure about the initialisation of the services that mentioned in depends_on block
+    # but while adding healthcheck to the service which needed to start before our service 
+    # in our case python script is depends on pg_db service
+    depends_on:
+      pg_db:
+        condition: service_healthy
+      pgadmin:
+        condition: service_started
+    volumes: 
+      - ./data:/app/data
+    networks:
+      - pg_network
+    entrypoint:
+      - python
+      - script.py
+
+networks:
+  pg_network:
+    driver: bridge
